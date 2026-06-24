@@ -1,0 +1,6 @@
+{
+  "name": "Random Minigame Event Platform",
+  "description": "Live event platform with minigames to randomly draw winners.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand-purple: #3D2463;
+  --color-brand-purple-dark: #2D1B4E;
+  --color-brand-purple-darker: #1A0F2E;
+  
+  --color-brand-blue: #1E90FF;
+  --color-brand-green: #00C853;
+  --color-brand-orange: #FF6B35;
+  --color-brand-charcoal: #1A1A1A;
+  --color-brand-gold: #FFD700;
+  
+  --color-surface-dark: #2A1F40;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  width: 100vw;
+  min-height: 100vh;
+  background: linear-gradient(-45deg, #6b21a8, #4c1d95, #3b0764, #1e1b4b, #6b21a8);
+  background-size: 400% 400%;
+  animation: gradientMove 15s ease infinite;
+  color: #f3f4f6;
+}
+
+@keyframes gradientMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@layer utilities {
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .liquid-glass-dark {
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .liquid-glass-card {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+  }
+
+  @keyframes shake-and-flash {
+    0% { transform: translateX(0); border-color: rgba(255, 0, 0, 0.5); }
+    10% { transform: translateX(-5px); border-color: rgba(255, 0, 0, 1); }
+    20% { transform: translateX(5px); border-color: rgba(255, 0, 0, 0.5); }
+    30% { transform: translateX(-5px); border-color: rgba(255, 0, 0, 1); }
+    40% { transform: translateX(5px); border-color: rgba(255, 0, 0, 0.5); }
+    50% { transform: translateX(-5px); border-color: rgba(255, 0, 0, 1); }
+    60% { transform: translateX(5px); border-color: rgba(255, 0, 0, 0.5); }
+    70% { transform: translateX(-5px); border-color: rgba(255, 0, 0, 1); }
+    80% { transform: translateX(5px); border-color: rgba(255, 0, 0, 0.5); }
+    90% { transform: translateX(-5px); border-color: rgba(255, 0, 0, 1); }
+    100% { transform: translateX(0); border-color: rgba(255, 0, 0, 1); }
+  }
+
+  .blinking-error {
+    animation: shake-and-flash 0.5s ease-in-out;
+    border-color: rgba(255, 0, 0, 1) !important;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5) !important;
+  }
+
+  @keyframes pop-up {
+    0% { transform: translateY(100%); opacity: 0; }
+    60% { transform: translateY(-10%); opacity: 1; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
