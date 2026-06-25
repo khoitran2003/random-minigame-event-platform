@@ -66,11 +66,26 @@ class RaceState {
 
   constructor(runnersData: { ids: string; isWinner: boolean }[]) {
     const winnerFinishTime = 4200 + Math.random() * 800;
+
+    // Randomly select 1 or 2 other runners to join the winner in the sprint pack (total 2-3 sprinters)
+    const nonWinners = runnersData.filter(r => !r.isWinner);
+    const sprintPackCount = 1 + Math.floor(Math.random() * 4); // 1 or 4 non-winners
+    const sprintPackIds = new Set<string>();
+
+    const shuffledNonWinners = [...nonWinners].sort(() => 0.5 - Math.random());
+    shuffledNonWinners.slice(0, sprintPackCount).forEach(r => {
+      sprintPackIds.add(r.ids);
+    });
+
     this.runners = runnersData.map(r => {
+      const inPack = r.isWinner || sprintPackIds.has(r.ids);
       const finishTime = r.isWinner
         ? winnerFinishTime
-        : winnerFinishTime + 800 + Math.random() * 1200;
-      const waypoints = this.generateWaypoints(r.isWinner);
+        : inPack
+          ? winnerFinishTime + 100 + Math.random() * 250 // very close sprint finish
+          : winnerFinishTime + 900 + Math.random() * 1100; // standard field finish
+
+      const waypoints = this.generateWaypoints(r.isWinner, inPack);
       return {
         id: r.ids,
         isWinner: r.isWinner,
@@ -89,7 +104,7 @@ class RaceState {
   //   2. CRUISE / SPRINT (t: 0.2 → 0.8): near-linear cruise, with a random burst
   //      (slope spike) OR exhaustion (slope dip) injected for variety.
   //   3. FINISH (t: 0.8 → 1.0): winner gets a steep "late kick"; losers flatten out.
-  generateWaypoints(isWinner: boolean): Waypoint[] {
+  generateWaypoints(isWinner: boolean, inPack: boolean): Waypoint[] {
     const pts: Waypoint[] = [{ t: 0, d: 0 }];
 
     // ── Phase 1: Block start ──────────────────────────────────────────────
@@ -110,8 +125,10 @@ class RaceState {
     // segment compensates so totals stay consistent and monotone.
     const cruiseEndT = 0.80;
     const cruiseEndD = isWinner
-      ? 0.70 + Math.random() * 0.05   // winner sits a touch back, saving the kick
-      : 0.74 + Math.random() * 0.10;  // losers may lead early, then fade
+      ? 0.70 + Math.random() * 0.04   // winner sits a touch back, saving the kick
+      : inPack
+        ? 0.69 + Math.random() * 0.05 // pack runners also sit close to the winner
+        : 0.75 + Math.random() * 0.09;  // field runners may drift behind or lead early
 
     const cruiseKnotsT = [0.38, 0.56, 0.68];
     // Base: linear distance across the cruise band from (startEndT,startEndD)→(cruiseEndT,cruiseEndD)
@@ -122,7 +139,16 @@ class RaceState {
     // Random event: ~55% of non-winners get a burst or exhaustion mid-race.
     const eventRoll = Math.random();
     let dDelta = [0, 0, 0];
-    if (!isWinner && eventRoll < 0.30) {
+    if (inPack && !isWinner) {
+      // Pack runners swap leads: they can burst early or late
+      if (eventRoll < 0.5) {
+        // Early burst, then slow down
+        dDelta = [+0.05 + Math.random() * 0.03, +0.02, -0.01];
+      } else {
+        // Slow start, late cruise burst
+        dDelta = [-0.04 - Math.random() * 0.02, -0.01, +0.03];
+      }
+    } else if (!isWinner && eventRoll < 0.30) {
       // SPRINT: push the first cruise knot forward (steep early slope), then the
       // runner naturally has less ground to cover after → relative slowdown.
       dDelta = [+0.06 + Math.random() * 0.04, +0.02, -0.01];
@@ -150,8 +176,13 @@ class RaceState {
       // Intermediate knot biased late → slope increases toward the tape.
       pts.push({ t: 0.92, d: cruiseEndD + (1 - cruiseEndD) * 0.55 });
       pts.push({ t: 1.0, d: 1.0 });
+    } else if (inPack) {
+      // Pack runners finish very close (close to 0.96)
+      const finalD = 0.94 + Math.random() * 0.018; // finish just behind the winner
+      pts.push({ t: 0.92, d: cruiseEndD + (finalD - cruiseEndD) * 0.6 });
+      pts.push({ t: 1.0, d: finalD });
     } else {
-      const finalD = 0.90 + Math.random() * 0.04;  // < 0.96 cap, fading finish
+      const finalD = 0.86 + Math.random() * 0.05;  // fading finish for the field
       pts.push({ t: 0.92, d: cruiseEndD + (finalD - cruiseEndD) * 0.7 });
       pts.push({ t: 1.0, d: finalD });
     }
