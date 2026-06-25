@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { EventConfig, Participant, Prize, RewardLogEntry } from '../types';
 import { ArrowLeft, Play, Trophy, FileText } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { motion, useAnimation } from 'motion/react';
+import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import RewardDecisionModal from './RewardDecisionModal';
 import RewardLogModal from './RewardLogModal';
 import { useLanguage } from '../LanguageContext';
@@ -27,15 +27,33 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
   });
   const [isSpinning, setIsSpinning] = useState(false);
   const [winner, setWinner] = useState<Participant | null>(null);
-  const [rotation, setRotation] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [showRewardLogModal, setShowRewardLogModal] = useState(false);
   const { t } = useLanguage();
-  const controls = useAnimation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const visualRotation = useMotionValue(0);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const [displayParticipants, setDisplayParticipants] = useState<Participant[]>([]);
   const numSlices = displayParticipants.length;
+
+  const tapeY = useTransform(visualRotation, (r) => {
+    if (numSlices === 0) return 100;
+    const deg = (360 - (r % 360)) % 360;
+    const rawIndex = (deg < 0 ? deg + 360 : deg) / (360 / numSlices);
+    return 100 - rawIndex * 40;
+  });
+
+  useEffect(() => {
+    const unsubscribe = visualRotation.on("change", (r) => {
+      if (numSlices === 0) return;
+      const deg = (360 - (r % 360)) % 360;
+      const idx = Math.floor((deg < 0 ? deg + 360 : deg) / (360 / numSlices)) % numSlices;
+      setActiveIndex(idx);
+    });
+    return () => unsubscribe();
+  }, [visualRotation, numSlices]);
 
   const currentPrize = config.prizes.find(p => p.id === selectedPrizeId);
 
@@ -72,7 +90,7 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
   };
 
   useEffect(() => {
-    setDisplayParticipants(config.remainingParticipants.slice(0, Math.min(config.remainingParticipants.length, 50)));
+    setDisplayParticipants(config.remainingParticipants);
   }, [config.remainingParticipants]);
 
   useEffect(() => {
@@ -139,14 +157,31 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
       ctx.rotate(angle + arcSize / 2);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${numSlices > 20 ? '10px' : '14px'} Inter, sans-serif`;
-      
-      const p = displayParticipants[i];
-      let text = p.name;
-      if (text.length > 10) text = text.substring(0, 8) + '...';
-      
-      ctx.fillText(text, 0, 0);
+      let fontSize = '14px';
+      let shouldDrawText = true;
+      if (numSlices > 100) {
+        shouldDrawText = false;
+      } else if (numSlices > 60) {
+        fontSize = '6px';
+      } else if (numSlices > 30) {
+        fontSize = '8px';
+      } else if (numSlices > 15) {
+        fontSize = '11px';
+      }
+
+      if (shouldDrawText) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `bold ${fontSize} Inter, sans-serif`;
+        
+        const p = displayParticipants[i];
+        let text = p.name;
+        const maxLen = numSlices > 60 ? 5 : 10;
+        if (text.length > maxLen) {
+          text = text.substring(0, maxLen - 2) + '..';
+        }
+        
+        ctx.fillText(text, 0, 0);
+      }
       ctx.restore();
     }
     
@@ -184,19 +219,14 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
 
     const arcSize = 360 / numSlices;
     const offset = arcSize / 2; // target middle of slice
-    
-    // We want the winning slice to end up at the top (270 degrees in canvas math, or pointing to our indicator)
-    // Let's say indicator is on the right (0 degrees).
     const targetAngle = 360 - (winningIndex * arcSize + offset);
-    
     const extraSpins = 5;
-    const finalRotation = rotation + (360 - (rotation % 360)) + (extraSpins * 360) + targetAngle;
+    const currentRot = visualRotation.get();
+    const finalRotation = currentRot + (360 - (currentRot % 360)) + (extraSpins * 360) + targetAngle;
 
-    setRotation(finalRotation);
-
-    await controls.start({
-      rotate: finalRotation,
-      transition: { duration: 5, ease: [0.2, 0.8, 0.2, 1] } // Custom easing for spin effect
+    await animate(visualRotation, finalRotation, {
+      duration: 5,
+      ease: [0.2, 0.8, 0.2, 1] // Custom easing for spin effect
     });
 
     setWinner(finalWinner);
@@ -235,6 +265,47 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
   return (
     <div className="flex flex-col items-center justify-between min-h-screen p-8 text-white w-full">
       
+      {/* Sliding Name Reel (Top-Left) */}
+      {displayParticipants.length > 0 && (
+        <div className="fixed top-28 left-8 z-30 w-64 h-[240px] liquid-glass rounded-2xl overflow-hidden border border-white/10 flex flex-col shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+          {/* Header */}
+          <div className="bg-black/40 px-4 py-2 border-b border-white/5 text-center text-xs font-bold tracking-wider text-white/60">
+            {t('game.remainingParticipants') || 'DANH SÁCH VÒNG XOAY'}
+          </div>
+          
+          {/* Reel Area */}
+          <div className="flex-1 relative overflow-hidden">
+            {/* Center active highlight line */}
+            <div className="absolute inset-x-2 top-[100px] h-[40px] rounded-lg bg-[#FF6B35]/20 border border-[#FF6B35]/40 pointer-events-none z-10 flex items-center justify-between px-3">
+              <span className="text-[#FFD700] text-xs font-bold">▶</span>
+              <span className="text-[#FFD700] text-xs font-bold">◀</span>
+            </div>
+            
+            {/* Scrollable list */}
+            <motion.div
+              style={{ y: tapeY }}
+              className="absolute left-0 right-0 flex flex-col"
+            >
+              {displayParticipants.map((p, idx) => {
+                const isActive = idx === activeIndex;
+                return (
+                  <div
+                    key={`reel-${p.ids}`}
+                    className={`h-[40px] flex items-center justify-center px-4 transition-all duration-150 ${
+                      isActive 
+                        ? 'text-[#FFD700] font-bold text-base scale-105 drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]' 
+                        : 'text-white/40 text-sm'
+                    }`}
+                  >
+                    <span className="truncate">{p.name}</span>
+                  </div>
+                );
+              })}
+            </motion.div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="w-full max-w-[1120px] flex justify-between items-center z-50 relative pointer-events-auto">
         <button
@@ -286,7 +357,7 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
               width={400}
               height={400}
               className="rounded-full"
-              animate={controls}
+              style={{ rotate: visualRotation }}
             />
           </div>
           

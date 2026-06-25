@@ -65,7 +65,7 @@ const translations: Record<Language, Record<string, string>> = {
     'game.remaining': 'Remaining: {count}',
     'game.drawing': 'Drawing:',
     'game.prizeDefault': 'Prize',
-    'game.underConstruction': 'The {gameMode} game mode is currently under construction. Please try Lucky Numbers or Lucky Wheel.',
+    'game.remainingParticipants': 'Wheel Participants',
     
     'finale.title': 'CONGRATULATIONS TO THE WINNERS!',
     'finale.others': 'Other Rewards',
@@ -169,7 +169,7 @@ const translations: Record<Language, Record<string, string>> = {
     'game.remaining': 'Còn lại: {count}',
     'game.drawing': 'Đang quay giải:',
     'game.prizeDefault': 'Giải thưởng',
-    'game.underConstruction': 'Trò chơi {gameMode} hiện đang được xây dựng. Vui lòng thử Vòng quay số hoặc Vòng quay may mắn.',
+    'game.remainingParticipants': 'Danh sách vòng xoay',
     
     'finale.title': 'CHÚC MỪNG CÁC NGƯỜI CHIẾN THẮNG!',
     'finale.others': 'Các giải thưởng khác',

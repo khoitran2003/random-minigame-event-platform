@@ -34,6 +34,13 @@ const RUNNER_COLORS = [
   '#5AC8FA',
 ];
 
+// ─── Track geometry (single source of truth) ──────────────────────────────────
+// Fractions of the track width. The start line lives at START_PCT, the finish
+// line at FINISH_PCT. Runners are anchored so their LEADING edge touches each
+// line without crossing it — width is subtracted at BOTH ends (see startX/endX).
+const START_PCT = 0.14;
+const FINISH_PCT = 0.88;
+
 interface Waypoint {
   t: number;
   d: number;
@@ -48,6 +55,11 @@ interface RunnerState {
   lastProgress: number;
 }
 
+// Each waypoint carries a precomputed tangent m (dd/dt) for Hermite interpolation.
+interface SplineWaypoint extends Waypoint {
+  m: number;
+}
+
 class RaceState {
   runners: RunnerState[];
   trackWidth = 800;
@@ -58,41 +70,161 @@ class RaceState {
       const finishTime = r.isWinner
         ? winnerFinishTime
         : winnerFinishTime + 800 + Math.random() * 1200;
+      const waypoints = this.generateWaypoints(r.isWinner);
       return {
         id: r.ids,
         isWinner: r.isWinner,
         finishTime,
-        waypoints: this.generateWaypoints(),
+        waypoints: this.computeTangents(waypoints), // attach monotone tangents
         progress: 0,
         lastProgress: 0,
       };
     });
   }
 
-  generateWaypoints(): Waypoint[] {
-    const points: Waypoint[] = [{ t: 0, d: 0 }];
-    const tVals = [0.20, 0.40, 0.60, 0.80];
-    let lastD = 0;
-    tVals.forEach(t => {
-      let minD = lastD + 0.02;
-      let maxD = t + 0.15;
-      if (minD > maxD) { minD = lastD + 0.01; maxD = lastD + 0.04; }
-      const d = Math.min(0.92, minD + Math.random() * (maxD - minD));
-      points.push({ t, d });
-      lastD = d;
+  // ─── 3-Phase Waypoint Generation ──────────────────────────────────────────
+  // Builds a strictly-increasing distance profile d(t) ∈ [0,1] sampled at a set
+  // of t knots. Three physical phases:
+  //   1. BLOCK START (t: 0 → 0.2): exponential ramp — small d, the heavy push-off.
+  //   2. CRUISE / SPRINT (t: 0.2 → 0.8): near-linear cruise, with a random burst
+  //      (slope spike) OR exhaustion (slope dip) injected for variety.
+  //   3. FINISH (t: 0.8 → 1.0): winner gets a steep "late kick"; losers flatten out.
+  generateWaypoints(isWinner: boolean): Waypoint[] {
+    const pts: Waypoint[] = [{ t: 0, d: 0 }];
+
+    // ── Phase 1: Block start ──────────────────────────────────────────────
+    // d grows like t^2.2 → derivative ≈ 0 at t=0 (ease-in), so runners crawl off
+    // the blocks instead of teleporting to top speed. By t=0.2 they've covered
+    // only ~3% of the track.
+    const startEndT = 0.18 + Math.random() * 0.04;            // ~0.18–0.22
+    const startEndD = 0.04 + Math.random() * 0.03;            // ~4–7% distance
+    // One intermediate knot inside the ramp keeps the spline tight to t^2.2.
+    const midT = startEndT * 0.6;
+    pts.push({ t: midT, d: startEndD * Math.pow(midT / startEndT, 2.2) });
+    pts.push({ t: startEndT, d: startEndD });
+
+    // ── Phase 2: Cruise with random sprint / exhaustion ───────────────────
+    // Lay down cruise knots; the average slope here is high (top speed). For some
+    // runners we perturb one segment: a SPRINT front-loads distance into a short
+    // t-window (steep slope), EXHAUSTION starves it (shallow slope). The opposite
+    // segment compensates so totals stay consistent and monotone.
+    const cruiseEndT = 0.80;
+    const cruiseEndD = isWinner
+      ? 0.70 + Math.random() * 0.05   // winner sits a touch back, saving the kick
+      : 0.74 + Math.random() * 0.10;  // losers may lead early, then fade
+
+    const cruiseKnotsT = [0.38, 0.56, 0.68];
+    // Base: linear distance across the cruise band from (startEndT,startEndD)→(cruiseEndT,cruiseEndD)
+    const spanT = cruiseEndT - startEndT;
+    const spanD = cruiseEndD - startEndD;
+    const baseD = cruiseKnotsT.map(t => startEndD + spanD * ((t - startEndT) / spanT));
+
+    // Random event: ~55% of non-winners get a burst or exhaustion mid-race.
+    const eventRoll = Math.random();
+    let dDelta = [0, 0, 0];
+    if (!isWinner && eventRoll < 0.30) {
+      // SPRINT: push the first cruise knot forward (steep early slope), then the
+      // runner naturally has less ground to cover after → relative slowdown.
+      dDelta = [+0.06 + Math.random() * 0.04, +0.02, -0.01];
+    } else if (!isWinner && eventRoll < 0.55) {
+      // EXHAUSTION: hold the first knot back (shallow slope = tiring), recover late.
+      dDelta = [-0.06 - Math.random() * 0.03, -0.02, +0.01];
+    }
+
+    let prevD = startEndD;
+    cruiseKnotsT.forEach((t, i) => {
+      // Clamp each knot so d stays strictly increasing and below the cruise cap.
+      let d = baseD[i] + dDelta[i];
+      d = Math.max(prevD + 0.01, Math.min(cruiseEndD - 0.005, d));
+      pts.push({ t, d });
+      prevD = d;
     });
-    points.push({ t: 1.0, d: 1.0 });
-    return points;
+    pts.push({ t: cruiseEndT, d: cruiseEndD });
+
+    // ── Phase 3: Finish ───────────────────────────────────────────────────
+    // Winner: steep late kick — covers the remaining (1 - cruiseEndD) with a
+    // rising slope, hitting exactly d=1.0 at t=1.0 (its finishTime).
+    // Losers: flatten — they keep moving but the slope decays, and update() caps
+    // them at 0.96 so they can never reach the line before the winner.
+    if (isWinner) {
+      // Intermediate knot biased late → slope increases toward the tape.
+      pts.push({ t: 0.92, d: cruiseEndD + (1 - cruiseEndD) * 0.55 });
+      pts.push({ t: 1.0, d: 1.0 });
+    } else {
+      const finalD = 0.90 + Math.random() * 0.04;  // < 0.96 cap, fading finish
+      pts.push({ t: 0.92, d: cruiseEndD + (finalD - cruiseEndD) * 0.7 });
+      pts.push({ t: 1.0, d: finalD });
+    }
+
+    return pts;
   }
 
+  // ─── Monotone Tangents (Fritsch–Carlson) ──────────────────────────────────
+  // Computes a tangent m_i (= dd/dt) at every knot for cubic Hermite interpolation.
+  // Plain Catmull-Rom can overshoot and produce a locally-decreasing curve between
+  // knots (runner sliding backward) when neighbouring slopes differ sharply — which
+  // is exactly what sprint/exhaustion waypoints create. Fritsch–Carlson limits the
+  // tangents so the resulting cubic is guaranteed monotone: velocity is smooth AND
+  // distance never decreases.
+  computeTangents(pts: Waypoint[]): SplineWaypoint[] {
+    const n = pts.length;
+    const secant: number[] = new Array(n - 1);
+    for (let i = 0; i < n - 1; i++) {
+      secant[i] = (pts[i + 1].d - pts[i].d) / (pts[i + 1].t - pts[i].t);
+    }
+
+    const m: number[] = new Array(n);
+    m[0] = secant[0];
+    m[n - 1] = secant[n - 2];
+    for (let i = 1; i < n - 1; i++) {
+      // Flat tangent at any local extremum keeps the curve from overshooting.
+      if (secant[i - 1] * secant[i] <= 0) m[i] = 0;
+      else m[i] = (secant[i - 1] + secant[i]) / 2;
+    }
+
+    // Fritsch–Carlson correction: clamp tangents into the monotone region (a circle
+    // of radius 3 in the (alpha,beta) slope ratios) so no Hermite segment dips.
+    for (let i = 0; i < n - 1; i++) {
+      if (secant[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+      const alpha = m[i] / secant[i];
+      const beta = m[i + 1] / secant[i];
+      const s = alpha * alpha + beta * beta;
+      if (s > 9) {
+        const tau = 3 / Math.sqrt(s);
+        m[i] = tau * alpha * secant[i];
+        m[i + 1] = tau * beta * secant[i];
+      }
+    }
+
+    return pts.map((p, i) => ({ ...p, m: m[i] }));
+  }
+
+  // ─── Cubic Hermite Interpolation ──────────────────────────────────────────
+  // Evaluates the monotone spline at parameter u. Within each [t_i, t_{i+1}]
+  // segment we blend the two endpoint distances and their tangents with the
+  // standard Hermite basis (h00,h10,h01,h11). Because the tangents are continuous
+  // across knots, the *velocity* (first derivative) is continuous too — no robotic
+  // corners at waypoints, unlike the old per-segment cosine ease.
   interpolate(u: number, waypoints: Waypoint[]): number {
+    const wp = waypoints as SplineWaypoint[];
     let i = 0;
-    while (i < waypoints.length - 1 && u > waypoints[i + 1].t) i++;
-    const pA = waypoints[i];
-    const pB = waypoints[i + 1];
-    const v = (u - pA.t) / (pB.t - pA.t);
-    const eased = (1 - Math.cos(v * Math.PI)) / 2;
-    return pA.d + (pB.d - pA.d) * eased;
+    while (i < wp.length - 1 && u > wp[i + 1].t) i++;
+    const pA = wp[i];
+    const pB = wp[i + 1];
+
+    const h = pB.t - pA.t;
+    const s = (u - pA.t) / h;            // normalized position in segment [0,1]
+    const s2 = s * s;
+    const s3 = s2 * s;
+
+    // Hermite basis functions
+    const h00 = 2 * s3 - 3 * s2 + 1;
+    const h10 = s3 - 2 * s2 + s;
+    const h01 = -2 * s3 + 3 * s2;
+    const h11 = s3 - s2;
+
+    // Tangents are dd/dt; multiply by segment width h to get dd/ds for this basis.
+    return h00 * pA.d + h10 * h * pA.m + h01 * pB.d + h11 * h * pB.m;
   }
 
   update(elapsed: number): boolean {
@@ -103,6 +235,9 @@ class RaceState {
       let d = this.interpolate(u, runner.waypoints);
       if (runner.isWinner && u >= 1.0) { d = 1.0; winnerFinished = true; }
       if (!runner.isWinner) d = Math.min(d, 0.96);
+      // Monotone guard: even with the spline's guarantee, clamp against the last
+      // emitted progress so floating-point noise can never nudge a runner backward.
+      d = Math.max(runner.lastProgress, d);
       runner.progress = d;
     });
     return winnerFinished;
@@ -309,8 +444,30 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
   const isRacingRef = useRef<boolean>(false);
   const startTimeRef = useRef<number | null>(null);
   const raceStateRef = useRef<RaceState | null>(null);
+  const runnerWidthRef = useRef<number>(40); // cached SVG visual width in px (incl. overflow limbs)
 
   const currentPrize = config.prizes.find(p => p.id === selectedPrizeId);
+
+  // ─── Measure the runner's true visual width ───────────────────────────────
+  // The name tag is now position:absolute (out of flow), so the wrapper box
+  // already equals the SVG box. We still measure the <svg> directly: it's the
+  // canonical foot-edge reference and stays correct even if someone later adds
+  // padding/border to the wrapper. overflow:visible limbs (foot at x≈40/48) are
+  // captured by getBoundingClientRect, so the anchor is the real leading edge.
+  const measureRunnerWidth = (el: HTMLElement): number => {
+    const svgEl = el.querySelector('svg');
+    const rect = (svgEl ?? el).getBoundingClientRect();
+    return rect.width || 40;
+  };
+
+  // Anchor x (the element's translate3d X) so the runner's RIGHT edge sits flush
+  // against the start line, fully behind it.
+  const computeStartX = (trackWidth: number, runnerW: number) =>
+    trackWidth * START_PCT - runnerW;
+
+  // Anchor x at the finish: the runner's right edge stops AT the finish line.
+  const computeEndX = (trackWidth: number, runnerW: number) =>
+    trackWidth * FINISH_PCT - runnerW;
 
   // Auto-switch to next available prize when current one is full
   useEffect(() => {
@@ -331,6 +488,35 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
       setupRace();
     }
   }, [config.remainingParticipants]);
+
+  // ─── Pin every runner to the start line once the DOM has laid out ─────────
+  // Runs after runners render (and on resize via raceId/runners change). This is
+  // what guarantees all 5 share the same vertical axis at t=0, regardless of name
+  // length, because computeStartX subtracts the measured SVG foot width.
+  useEffect(() => {
+    if (isRacing) return;            // never fight the rAF loop mid-race
+    if (!trackRef.current || runners.length === 0) return;
+
+    const place = () => {
+      const trackWidth = trackRef.current!.getBoundingClientRect().width;
+      if (raceStateRef.current) raceStateRef.current.trackWidth = trackWidth;
+      runners.forEach((runner, i) => {
+        const el = document.querySelector<HTMLDivElement>(`[data-runner-id="${runner.participant.ids}"]`);
+        if (!el) return;
+        if (i === 0) runnerWidthRef.current = measureRunnerWidth(el);
+        el.style.left = '0px';
+        el.style.transform = `translate3d(${computeStartX(trackWidth, runnerWidthRef.current)}px, -50%, 0)`;
+      });
+    };
+
+    // Defer one frame so SVG layout (and fonts for the name tag) are final.
+    const raf = requestAnimationFrame(place);
+    window.addEventListener('resize', place);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', place);
+    };
+  }, [runners, raceId, isRacing]);
 
   const setupRace = (customPool?: Participant[]) => {
     setRaceId(prev => prev + 1);
@@ -394,15 +580,15 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
     const trackWidth = trackRef.current ? trackRef.current.getBoundingClientRect().width : 900;
     raceStateRef.current.trackWidth = trackWidth;
 
-    // Switch runner elements from CSS percentage positioning to absolute pixel positioning
-    // so the translate3d in animateRace controls their X position cleanly
-    raceStateRef.current.runners.forEach(runner => {
+    // Re-anchor every runner to the strict zero-point so the rAF loop's
+    // translate3d takes over cleanly from the exact start position.
+    raceStateRef.current.runners.forEach((runner, i) => {
       const el = document.querySelector<HTMLDivElement>(`[data-runner-id="${runner.id}"]`);
       if (el) {
+        // Measure once from the first element; captures overflow:visible limbs.
+        if (i === 0) runnerWidthRef.current = measureRunnerWidth(el);
         el.style.left = '0px';
-        // Place runner at startX immediately so there's no jump on frame 1
-        const startX = trackWidth * 0.14;
-        el.style.transform = `translate3d(${startX}px, -50%, 0)`;
+        el.style.transform = `translate3d(${computeStartX(trackWidth, runnerWidthRef.current)}px, -50%, 0)`;
       }
     });
 
@@ -423,8 +609,17 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
     const winnerFinished = raceState.update(elapsed);
 
     const trackWidth = raceState.trackWidth;
-    const startX = trackWidth * 0.14;
-    const totalDistance = trackWidth * 0.74;
+    const runnerW = runnerWidthRef.current;
+
+    // ─── Bounding-box math (width accounted for at BOTH ends) ───────────────
+    // START: right edge flush against start line → anchor = START%·W − runnerW.
+    const startX = computeStartX(trackWidth, runnerW);          // = W*0.14 − runnerW
+    // FINISH: right edge stops AT finish line  → anchor = FINISH%·W − runnerW.
+    const endX = computeEndX(trackWidth, runnerW);              // = W*0.88 − runnerW
+    // The anchor travels endX − startX. The runnerW terms cancel, so the span is
+    // exactly W*(0.88 − 0.14) = W*0.74 — cadence math unaffected, but both
+    // absolute endpoints now respect the runner's width (no crossing either line).
+    const totalDistance = endX - startX;                        // = W*0.74
 
     raceState.runners.forEach(runner => {
       const el = document.querySelector<HTMLDivElement>(`[data-runner-id="${runner.id}"]`);
@@ -518,7 +713,8 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
     : 1;
   const runnerSize = maxInLane > 15 ? 18 : maxInLane > 8 ? 24 : maxInLane > 4 ? 30 : 38;
 
-  const finishPct = 88; // percentage position of finish line from left
+  const finishPct = FINISH_PCT * 100; // percentage position of finish line from left
+  const startPct = START_PCT * 100;   // percentage position of start line from left
 
   return (
     <div className="flex flex-col min-h-screen text-white w-full relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #0f0622 0%, #1a0f2e 40%, #0f1a0f 100%)' }}>
@@ -718,21 +914,26 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
         <div
           ref={trackRef}
           className="w-full max-w-[1200px] rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.6)] relative"
-          style={{ background: 'linear-gradient(180deg, #1a0a05 0%, #1a0a05 100%)' }}
+          style={{
+            background: 'linear-gradient(180deg, #1a0a05 0%, #1a0a05 100%)',
+            // Single source of truth shared by the start line and runner anchoring.
+            ['--start-x' as any]: `${startPct}%`,
+            ['--finish-x' as any]: `${finishPct}%`,
+          }}
         >
           {/* Track surface gradient */}
           <div className="absolute inset-0 pointer-events-none"
             style={{ background: 'linear-gradient(180deg, rgba(180,60,20,0.15) 0%, rgba(120,40,10,0.1) 100%)' }}
           />
 
-          {/* Start line */}
-          <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: '14%' }}>
-            <div className="w-[3px] h-full bg-white/80" />
+          {/* Start line — solid 4px white, spans all 5 lanes top→bottom */}
+          <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: 'var(--start-x)' }}>
+            <div className="h-full bg-white" style={{ width: '4px', boxShadow: '0 0 6px rgba(255,255,255,0.5)' }} />
             <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-black text-white/60 tracking-widest uppercase whitespace-nowrap">START</div>
           </div>
 
           {/* Finish line — checkerboard */}
-          <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: `${finishPct}%` }}>
+          <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: 'var(--finish-x)' }}>
             <div className="w-[6px] h-full flex flex-col">
               {Array.from({ length: 40 }).map((_, i) => (
                 <div key={i} className={`flex-1 w-full ${i % 2 === 0 ? 'bg-white' : 'bg-black'}`} />
@@ -746,7 +947,7 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
             <div
               className="absolute top-0 bottom-0 z-30 pointer-events-none"
               style={{
-                left: `${finishPct}%`,
+                left: 'var(--finish-x)',
                 width: '4px',
                 background: 'linear-gradient(to bottom, #FFD700, #FF6B35, #FFD700)',
                 boxShadow: '0 0 8px rgba(255,215,0,0.8)',
@@ -757,7 +958,7 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
           {tapeBroken && (
             <>
               <div className="absolute top-0 bottom-0 z-30 pointer-events-none" style={{
-                left: `${finishPct}%`, width: '4px',
+                left: 'var(--finish-x)', width: '4px',
                 background: 'linear-gradient(to bottom, #FFD700, #FF6B35)',
                 animation: 'tapeBurst 0.8s ease-out forwards',
               }} />
@@ -780,7 +981,7 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
 
           {/* Distance markers */}
           {[25, 50, 75].map(pct => (
-            <div key={pct} className="absolute top-0 bottom-0 z-10 pointer-events-none" style={{ left: `${14 + pct * 0.74}%` }}>
+            <div key={pct} className="absolute top-0 bottom-0 z-10 pointer-events-none" style={{ left: `${startPct + pct * 0.74}%` }}>
               <div className="w-px h-full bg-white/10" />
             </div>
           ))}
@@ -813,18 +1014,28 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
                     key={`${raceId}-${runner.participant.ids}`}
                     data-runner-id={runner.participant.ids}
                     data-runner-el="1"
-                    className={`absolute flex flex-col items-center z-20 ${runner.participant.ids === winnerId && tapeBroken ? 'winner-runner' : ''}`}
+                    // Wrapper wraps TIGHTLY around the SVG only. No flex/items-center,
+                    // so a long name tag can never inflate the wrapper width and push
+                    // the SVG off-center. inline-block + line-height:0 collapses any
+                    // whitespace gap so the box === the SVG's box.
+                    className={`absolute inline-block z-20 ${runner.participant.ids === winnerId && tapeBroken ? 'winner-runner' : ''}`}
                     style={{
-                      left: '14%',
+                      left: '0px',
                       top: `${runner.yOffset}%`,
-                      transform: 'translateY(-50%)',
+                      lineHeight: 0,
+                      // Off-screen until the placement effect measures & pins to the
+                      // start line. Prevents a one-frame flash at the wrong x.
+                      transform: 'translate3d(-9999px, -50%, 0)',
                       color: runner.color,
                       willChange: 'transform',
                     }}
                   >
-                    {/* Name tag */}
+                    {/* Name tag — absolutely positioned, OUT of the flow, so it does
+                        not contribute to the wrapper's bounding box. Centered over
+                        the SVG via left:50% + translateX(-50%); floats above via
+                        bottom:100%. */}
                     <span
-                      className="text-[9px] font-black px-1.5 py-px rounded leading-none whitespace-nowrap mb-1 select-none pointer-events-none border"
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 text-[9px] font-black px-1.5 py-px rounded leading-none whitespace-nowrap select-none pointer-events-none border"
                       style={{
                         background: 'rgba(0,0,0,0.75)',
                         borderColor: runner.color + '60',
@@ -836,9 +1047,9 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
                       {runner.participant.name}
                     </span>
 
-                    {/* Winner crown */}
+                    {/* Winner crown — also absolute so it stays out of the box too */}
                     {runner.participant.ids === winnerId && tapeBroken && (
-                      <div className="absolute -top-5 text-base select-none">👑</div>
+                      <div className="absolute left-1/2 -translate-x-1/2 -top-5 text-base select-none pointer-events-none">👑</div>
                     )}
 
                     <RunnerSVG color={runner.color} size={runnerSize} phase={runner.phase} />
