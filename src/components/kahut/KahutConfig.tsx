@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { FileUp, Download, FolderOpen, Eye, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { FileUp, Download, FolderOpen, Eye, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { EventConfig, KahutQuestion } from '../../types';
 import { useLanguage } from '../../LanguageContext';
 import BackgroundSettings from '../BackgroundSettings';
@@ -26,6 +26,24 @@ export default function KahutConfig({
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [errors, setErrors] = useState<CsvIssue[]>([]);
   const [fileName, setFileName] = useState('');
+  const [showImageTips, setShowImageTips] = useState(false);
+  const imageTipsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showImageTips) return;
+    const onDown = (e: MouseEvent) => {
+      if (!imageTipsRef.current?.contains(e.target as Node)) setShowImageTips(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowImageTips(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showImageTips]);
 
   const handleCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -100,8 +118,39 @@ export default function KahutConfig({
       </section>
 
       {/* Step 2: images (optional) */}
-      <section className={panel}>
-        <h2 className={heading}>02 / {t('kahut.stepImages')} <span className="text-white/50 text-xs">({t('kahut.optional')})</span></h2>
+      <section className={`${panel} relative ${showImageTips ? 'z-30' : ''}`}>
+        <div className="flex items-center gap-2" ref={imageTipsRef}>
+          <h2 className={heading}>02 / {t('kahut.stepImages')} <span className="text-white/50 text-xs">({t('kahut.optional')})</span></h2>
+          <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowImageTips(v => !v)}
+            aria-expanded={showImageTips}
+            aria-label={t('kahut.imageTipsTitle')}
+            title={t('kahut.imageTipsTitle')}
+            className={`flex items-center justify-center w-6 h-6 rounded-full border transition-all ${
+              showImageTips
+                ? 'border-neon-cyan text-neon-cyan bg-neon-cyan/15'
+                : 'border-white/30 text-white/70 hover:border-neon-cyan hover:text-neon-cyan'
+            }`}
+          >
+            <Info className="w-4 h-4" />
+          </button>
+          {showImageTips && (
+            <div
+              role="note"
+              className="absolute z-30 left-0 top-full mt-2 sm:left-full sm:top-0 sm:mt-0 sm:ml-3 w-[min(420px,calc(100vw-4rem))] rounded-xl border border-neon-cyan/50 bg-arcade-ink/95 backdrop-blur p-4 text-sm text-white/90 shadow-[0_0_30px_rgba(34,211,238,0.25)] font-sans"
+            >
+              <div className="font-mono text-neon-cyan mb-2">{t('kahut.imageTipsTitle')}</div>
+              <ul className="list-disc pl-5 flex flex-col gap-1.5 marker:text-neon-cyan">
+                {[1, 2, 3, 4, 5, 6].map(n => (
+                  <li key={n}>{t(`kahut.imageTip${n}`)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          </div>
+        </div>
         <p className="text-sm text-white/70">{t('kahut.imagesHelp')}</p>
         <input
           ref={folderInputRef}
