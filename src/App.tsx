@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { EventConfig, GameMode } from './types';
+import { EventConfig, GameMode, MainTab } from './types';
+import MainSidebar from './components/MainSidebar';
+import KahutTab from './components/kahut/KahutTab';
 import ConfigPanel from './components/ConfigPanel';
 import GameMenu from './components/GameMenu';
 import LuckyNumbersGame from './components/LuckyNumbersGame';
@@ -29,6 +31,22 @@ export default function App() {
     currentSessionId: crypto.randomUUID(),
   }));
   const [gameMode, setGameMode] = useState<GameMode>('CONFIG');
+  const [activeTab, setActiveTab] = useState<MainTab>('RANDOM_GAMES');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      if (saved !== null) return saved === 'true';
+    } catch {}
+    return typeof window !== 'undefined' && window.innerWidth < 768;
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('sidebarCollapsed', String(next)); } catch {}
+      return next;
+    });
+  };
 
   const gameModeRef = React.useRef(gameMode);
   React.useEffect(() => {
@@ -80,9 +98,9 @@ export default function App() {
   };
 
   const appStyle: React.CSSProperties = {
-    minHeight: '100vh',
+    height: '100vh',
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'row',
     fontFamily: 'var(--font-sans)',
   };
 
@@ -100,7 +118,19 @@ export default function App() {
       {/* Background Overlay */}
       {config.backgroundUrl && <div className="absolute inset-0 pointer-events-none z-0" style={{ backgroundColor: `rgba(0, 0, 0, ${config.backgroundOverlayOpacity / 100})`, backdropFilter: `blur(${config.backgroundBlur}px)`, WebkitBackdropFilter: `blur(${config.backgroundBlur}px)` }} />}
 
-      <div className="relative z-10 w-full min-h-screen">
+      <MainSidebar
+        activeTab={activeTab}
+        onChangeTab={setActiveTab}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
+      />
+
+      <main className="relative z-10 flex-1 min-w-0 h-screen overflow-y-auto">
+      {/* Both tabs stay mounted (hidden) so progress survives tab switches */}
+      <div className={activeTab === 'KAHUT' ? 'w-full min-h-screen' : 'hidden'}>
+        <KahutTab config={config} onUpdate={updateConfig} />
+      </div>
+      <div className={activeTab === 'RANDOM_GAMES' ? 'relative w-full min-h-screen' : 'hidden'}>
         {gameMode === 'CONFIG' && (
           <ConfigPanel 
             config={config} 
@@ -166,6 +196,7 @@ export default function App() {
           </div>
         )}
       </div>
+      </main>
     </div>
   );
 }

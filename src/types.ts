@@ -49,3 +49,15 @@ export type GameMode =
   | 'BALLOON_POP'
   | 'CARD_FLIP'
   | 'GRAND_FINALE';
+
+export type MainTab = 'RANDOM_GAMES' | 'KAHUT';
+
+export interface KahutQuestion {
+  id: number;
+  question: string;
+  answers: string[];
+  correctIndex: number;
+  timeSec: number;
+}
+
+export type KahutPhase = 'CONFIG' | 'PREVIEW' | 'LOBBY' | 'QUESTION' | 'REVEAL' | 'FINISH';

@@ -1,8 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   --color-brand-purple: #3D2463;
@@ -16,6 +17,12 @@
   --color-brand-gold: #FFD700;
   
   --color-surface-dark: #2A1F40;
+
+  --color-arcade-ink: #0B0F1A;
+  --color-neon-cyan: #22D3EE;
+  --color-neon-magenta: #E879F9;
+  --color-neon-lime: #A3E635;
+  --color-neon-orange: #FB923C;
 }
 
 body {
@@ -88,5 +95,19 @@ body {
   @keyframes fade-in {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes segment-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { text-shadow: 0 0 12px rgba(34,211,238,.6), 0 0 36px rgba(34,211,238,.35); }
+    50% { text-shadow: 0 0 18px rgba(232,121,249,.7), 0 0 52px rgba(232,121,249,.4); }
+  }
+
+  .scanline {
+    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 4px);
   }
 }

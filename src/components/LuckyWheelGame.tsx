@@ -263,11 +263,11 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
   };
 
   return (
-    <div className="flex flex-col items-center justify-between min-h-screen p-8 text-white w-full">
+    <div className="relative flex flex-col items-center justify-between min-h-screen p-8 text-white w-full">
       
       {/* Sliding Name Reel (Top-Left) */}
       {displayParticipants.length > 0 && (
-        <div className="fixed top-28 left-8 z-30 w-64 h-[240px] liquid-glass rounded-2xl overflow-hidden border border-white/10 flex flex-col shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+        <div className="absolute top-28 left-8 z-30 w-64 h-[240px] liquid-glass rounded-2xl overflow-hidden border border-white/10 flex flex-col shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
           {/* Header */}
           <div className="bg-black/40 px-4 py-2 border-b border-white/5 text-center text-xs font-bold tracking-wider text-white/60">
             {t('game.remainingParticipants') || 'DANH SÁCH VÒNG XOAY'}
