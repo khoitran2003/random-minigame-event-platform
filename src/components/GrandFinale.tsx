@@ -114,7 +114,7 @@ export default function GrandFinale({ config, onBack, sessionId }: Props) {
   });
 
   return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row items-stretch justify-start relative overflow-hidden bg-gradient-to-br from-[#2D1B4E] to-[#1A0F2E]">
+    <div data-theme="dark" className="min-h-screen w-full flex flex-col md:flex-row items-stretch justify-start relative overflow-hidden bg-gradient-to-br from-[#2D1B4E] to-[#1A0F2E]">
       
       {/* Left/Center Area: Title and Podium */}
       <div className="flex-1 flex flex-col items-center justify-between pb-0 pt-24 px-4 md:px-8 relative overflow-hidden min-w-0">

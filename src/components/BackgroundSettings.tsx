@@ -2,6 +2,39 @@ import React, { useRef } from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { EventConfig } from '../types';
 import { useLanguage } from '../LanguageContext';
+import { useTheme } from '../ThemeContext';
+
+// Average perceived brightness (0-1) of an image, composited over a fallback color
+// so transparent PNGs are judged by what actually shows on screen.
+const measureLuminance = (src: string, fallbackColor: string): Promise<number | null> =>
+  new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const size = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(null);
+        ctx.fillStyle = fallbackColor;
+        ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(img, 0, 0, size, size);
+        const { data } = ctx.getImageData(0, 0, size, size);
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+        }
+        resolve(sum / (data.length / 4) / 255);
+      } catch {
+        resolve(null); // tainted canvas (cross-origin URL)
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+
+const LIGHT_BG_THRESHOLD = 0.6;
 
 interface Props {
   config: EventConfig;
@@ -10,6 +43,7 @@ interface Props {
 
 export default function BackgroundSettings({ config, onUpdate }: Props) {
   const { t } = useLanguage();
+  const { setTheme } = useTheme();
   const bgFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleBgFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -19,7 +53,11 @@ export default function BackgroundSettings({ config, onUpdate }: Props) {
     const reader = new FileReader();
     reader.onload = (e) => {
       if (e.target?.result) {
-        onUpdate({ backgroundUrl: e.target.result as string });
+        const dataUrl = e.target.result as string;
+        onUpdate({ backgroundUrl: dataUrl });
+        measureLuminance(dataUrl, config.backgroundColor).then(lum => {
+          if (lum !== null) setTheme(lum > LIGHT_BG_THRESHOLD ? 'light' : 'dark');
+        });
       }
     };
     reader.readAsDataURL(file);

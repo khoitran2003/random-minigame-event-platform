@@ -748,7 +748,7 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
   const startPct = START_PCT * 100;   // percentage position of start line from left
 
   return (
-    <div className="flex flex-col min-h-screen text-white w-full relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #0f0622 0%, #1a0f2e 40%, #0f1a0f 100%)' }}>
+    <div data-theme="dark" className="flex flex-col min-h-screen text-white w-full relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #0f0622 0%, #1a0f2e 40%, #0f1a0f 100%)' }}>
       {/* ── Keyframe Styles ─────────────────────────────────────────────── */}
       <style>{`
         /* Leg: forward swing */
@@ -924,7 +924,7 @@ export default function HumanAthleticsGame({ config, onBack, updateConfig }: Pro
               className="bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer"
             >
               {config.prizes.map(p => (
-                <option key={p.id} value={p.id} className="text-black">{p.name}</option>
+                <option key={p.id} value={p.id} className="text-gray-900">{p.name}</option>
               ))}
             </select>
           </div>

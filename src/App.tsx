@@ -8,6 +8,7 @@ import LuckyNumbersGame from './components/LuckyNumbersGame';
 import LuckyWheelGame from './components/LuckyWheelGame';
 import HumanAthleticsGame from './components/HumanAthleticsGame';
 import GrandFinale from './components/GrandFinale';
+import { useTheme } from './ThemeContext';
 import { useLanguage } from './LanguageContext';
 
 const INITIAL_CONFIG_BASE = {
@@ -22,6 +23,7 @@ const INITIAL_CONFIG_BASE = {
 };
 
 export default function App() {
+  const { theme } = useTheme();
   const { t, lang } = useLanguage();
   
   const [config, setConfig] = useState<EventConfig>(() => ({
@@ -116,7 +118,7 @@ export default function App() {
   return (
     <div style={appStyle} className="relative overflow-hidden w-full h-full">
       {/* Background Overlay */}
-      {config.backgroundUrl && <div className="absolute inset-0 pointer-events-none z-0" style={{ backgroundColor: `rgba(0, 0, 0, ${config.backgroundOverlayOpacity / 100})`, backdropFilter: `blur(${config.backgroundBlur}px)`, WebkitBackdropFilter: `blur(${config.backgroundBlur}px)` }} />}
+      {config.backgroundUrl && <div className="absolute inset-0 pointer-events-none z-0" style={{ backgroundColor: `rgba(${theme === 'light' ? '255, 255, 255' : '0, 0, 0'}, ${config.backgroundOverlayOpacity / 100})`, backdropFilter: `blur(${config.backgroundBlur}px)`, WebkitBackdropFilter: `blur(${config.backgroundBlur}px)` }} />}
 
       <MainSidebar
         activeTab={activeTab}

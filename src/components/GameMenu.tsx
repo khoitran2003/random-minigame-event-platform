@@ -44,6 +44,7 @@ export default function GameMenu({ onSelectGame, onBack }: Props) {
           <button
             key={game.id}
             onClick={() => onSelectGame(game.id as GameMode)}
+            data-theme="dark"
             style={{ backgroundColor: game.color }}
             className="w-[260px] h-[220px] rounded-2xl p-6 flex flex-col justify-center items-center gap-4 liquid-glass-card hover:scale-[1.02] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.3)] transition-all duration-300 text-white group relative overflow-hidden"
           >

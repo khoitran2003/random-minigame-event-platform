@@ -17,7 +17,7 @@ export default function RewardDecisionModal({ winner, prize, onAccept, onRejectK
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1A102E] border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl relative overflow-hidden">
+      <div className="bg-(--surface-modal) border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl relative overflow-hidden">
         {/* Glow effect */}
         <div className="absolute -top-24 -left-24 w-48 h-48 bg-purple-500/20 rounded-full blur-[80px] pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-[80px] pointer-events-none" />
@@ -55,7 +55,7 @@ export default function RewardDecisionModal({ winner, prize, onAccept, onRejectK
               </button>
               <button
                 onClick={onAccept}
-                className="flex-1 py-3 px-4 flex items-center justify-center gap-2 rounded-xl font-medium bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20 transition-all"
+                className="flex-1 py-3 px-4 flex items-center justify-center gap-2 rounded-xl font-medium bg-green-500 hover:bg-green-600 text-on-accent shadow-lg shadow-green-500/20 transition-all"
               >
                 <Check size={18} />
                 {t('modal.acceptBtn')}

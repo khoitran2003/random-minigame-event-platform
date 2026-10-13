@@ -132,10 +132,19 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
   };
 
   const loadSampleList = () => {
+    const usedIds = new Set<string>();
+    const randomId = () => {
+      let id: string;
+      do {
+        id = String(Math.floor(1e11 + Math.random() * 9e11));
+      } while (usedIds.has(id));
+      usedIds.add(id);
+      return id;
+    };
     const samples: Participant[] = Array.from({ length: 100 }, (_, i) => {
       const num = (i + 1).toString().padStart(4, '0');
       return {
-        ids: `P${num}`,
+        ids: randomId(),
         name: lang === 'en' ? `Player ${num}` : `Người chơi ${num}`
       };
     });
@@ -163,7 +172,7 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
       <header className="flex justify-between items-center mb-8 h-20 border-b border-white/10">
         <div className="flex items-center gap-4">
           <h1 className="text-3xl lg:text-[36px] font-bold flex items-center gap-3 text-white">
-            <Settings className="w-8 h-8 text-[#FFD700]" />
+            <Settings className="w-8 h-8 text-brand-gold" />
             {t('config.title')}
           </h1>
           <button
@@ -292,7 +301,7 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
                         {config.prizes.length > 1 && (
                           <button
                             onClick={() => removePrize(prize.id)}
-                            className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-[#FF6B35] hover:bg-white/10 transition-colors"
+                            className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-brand-orange hover:bg-white/10 transition-colors"
                           >
                             ×
                           </button>
@@ -322,7 +331,7 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
                     onClick={() => setShowRemovedList(!showRemovedList)}
                     className={`text-[12px] font-medium px-3 py-1 rounded-lg h-6 flex items-center transition-all cursor-pointer select-none ${
                       showRemovedList 
-                        ? 'bg-red-500 text-white shadow-md shadow-red-500/20' 
+                        ? 'bg-red-500 text-on-accent shadow-md shadow-red-500/20' 
                         : 'text-red-400 bg-red-500/10 hover:bg-red-500/20'
                     }`}
                   >
@@ -359,15 +368,15 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
                 {t('config.csvFormat')}
               </p>
 
-              {csvError && <div className="text-[#FF6B35] text-[14px] bg-[#FF6B35]/10 p-3 rounded-lg mb-4">{csvError}</div>}
-              {csvSuccess && <div className="text-[#00C853] text-[14px] bg-[#00C853]/10 p-3 rounded-lg mb-4">{csvSuccess}</div>}
+              {csvError && <div className="text-brand-orange text-[14px] bg-[#FF6B35]/10 p-3 rounded-lg mb-4">{csvError}</div>}
+              {csvSuccess && <div className="text-brand-green text-[14px] bg-[#00C853]/10 p-3 rounded-lg mb-4">{csvSuccess}</div>}
 
               <div className="flex-1 bg-black/30 rounded-xl border border-white/10 overflow-hidden flex flex-col w-full">
                 {showRemovedList ? (
                   <div className="flex-1 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-white/10 overflow-hidden">
                     {/* Left: Remaining List */}
                     <div className="flex-1 flex flex-col min-w-0">
-                      <div className="bg-[#2A1F40]/50 px-4 py-2 border-b border-white/10 text-xs font-bold text-white/60 tracking-wider uppercase">
+                      <div className="bg-(--surface-head)/50 px-4 py-2 border-b border-white/10 text-xs font-bold text-white/60 tracking-wider uppercase">
                         {t('config.remaining')}
                       </div>
                       {config.remainingParticipants.length === 0 ? (
@@ -377,7 +386,7 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
                       ) : (
                         <div className="flex-1 overflow-y-auto p-0 max-h-[250px]">
                           <table className="w-full text-left text-[12px] text-white/80 font-mono">
-                            <thead className="sticky top-0 bg-[#2A1F40] shadow-md z-10">
+                            <thead className="sticky top-0 bg-(--surface-head) shadow-md z-10">
                               <tr>
                                 <th className="py-2 px-4 font-medium border-b border-white/10">{t('generic.id')}</th>
                                 <th className="py-2 px-4 font-medium border-b border-white/10">{t('generic.name')}</th>
@@ -403,7 +412,7 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
 
                     {/* Right: Removed List */}
                     <div className="flex-1 flex flex-col min-w-0">
-                      <div className="bg-[#2A1F40]/50 px-4 py-2 border-b border-white/10 text-xs font-bold text-white/60 tracking-wider uppercase">
+                      <div className="bg-(--surface-head)/50 px-4 py-2 border-b border-white/10 text-xs font-bold text-white/60 tracking-wider uppercase">
                         {t('config.removed')}
                       </div>
                       {removedParticipants.length === 0 ? (
@@ -413,7 +422,7 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
                       ) : (
                         <div className="flex-1 overflow-y-auto p-0 max-h-[250px]">
                           <table className="w-full text-left text-[12px] text-white/80 font-mono">
-                            <thead className="sticky top-0 bg-[#2A1F40] shadow-md z-10">
+                            <thead className="sticky top-0 bg-(--surface-head) shadow-md z-10">
                               <tr>
                                 <th className="py-2 px-4 font-medium border-b border-white/10">{t('generic.id')}</th>
                                 <th className="py-2 px-4 font-medium border-b border-white/10">{t('generic.name')}</th>
@@ -456,7 +465,7 @@ export default function ConfigPanel({ config, onUpdate, onLaunch }: Props) {
                   ) : (
                     <div className="flex-1 overflow-y-auto p-0 max-h-[250px]">
                       <table className="w-full text-left text-[12px] text-white/80 font-mono">
-                        <thead className="sticky top-0 bg-[#2A1F40] shadow-md z-10">
+                        <thead className="sticky top-0 bg-(--surface-head) shadow-md z-10">
                           <tr>
                             <th className="py-2 px-4 font-medium border-b border-white/10">{t('generic.id')}</th>
                             <th className="py-2 px-4 font-medium border-b border-white/10">{t('generic.name')}</th>

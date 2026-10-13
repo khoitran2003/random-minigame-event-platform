@@ -183,7 +183,7 @@ export default function LuckyNumbersGame({ config, onBack, updateConfig }: Props
             <FileText className="w-4 h-4" /> {t('game.rewardLog')}
           </button>
           <div className="flex items-center gap-2 bg-black/30 p-2 rounded-xl border border-white/10">
-            <Trophy className="w-5 h-5 text-[#FFD700]" />
+            <Trophy className="w-5 h-5 text-brand-gold" />
             <select 
               value={selectedPrizeId}
               onChange={(e) => setSelectedPrizeId(e.target.value)}
@@ -191,7 +191,7 @@ export default function LuckyNumbersGame({ config, onBack, updateConfig }: Props
               className="bg-transparent text-white font-medium focus:outline-none cursor-pointer"
             >
               {config.prizes.map(p => (
-                <option key={p.id} value={p.id} className="text-black">{p.name}</option>
+                <option key={p.id} value={p.id} className="text-gray-900">{p.name}</option>
               ))}
             </select>
           </div>
@@ -202,7 +202,7 @@ export default function LuckyNumbersGame({ config, onBack, updateConfig }: Props
       <div className="flex-1 flex flex-col items-center justify-center w-full z-10 relative mt-[-50px]">
         
         <div className="mb-8">
-           <h2 className="text-2xl text-[#FFD700] font-bold drop-shadow-lg">{t('game.drawing')} {currentPrize?.name || t('game.prizeDefault')}</h2>
+           <h2 className="text-2xl text-brand-gold font-bold drop-shadow-lg">{t('game.drawing')} {currentPrize?.name || t('game.prizeDefault')}</h2>
         </div>
 
         {/* Slot Machine Container */}
@@ -236,7 +236,7 @@ export default function LuckyNumbersGame({ config, onBack, updateConfig }: Props
         <button
           onClick={startDraw}
           disabled={isDrawing || !!winner || config.remainingParticipants.length === 0}
-          className={`mt-12 px-12 py-5 rounded-2xl font-bold text-2xl flex items-center gap-4 transition-all duration-300 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.2)] ${
+          className={`mt-12 px-12 py-5 rounded-2xl font-bold text-2xl text-on-accent flex items-center gap-4 transition-all duration-300 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.2)] ${
             isDrawing || !!winner || config.remainingParticipants.length === 0
               ? 'bg-gray-600 cursor-not-allowed opacity-50'
               : 'bg-[#1E90FF] hover:bg-[#1c84ea] hover:scale-105 hover:shadow-[0_25px_50px_-12px_rgba(30,144,255,0.4)]'

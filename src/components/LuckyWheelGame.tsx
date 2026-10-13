@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EventConfig, Participant, Prize, RewardLogEntry } from '../types';
 import { ArrowLeft, Play, Trophy, FileText } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import RewardDecisionModal from './RewardDecisionModal';
 import RewardLogModal from './RewardLogModal';
+import WinnersPanel from './WinnersPanel';
 import { useLanguage } from '../LanguageContext';
+import { useTheme } from '../ThemeContext';
 
 interface Props {
   config: EventConfig;
@@ -13,7 +15,26 @@ interface Props {
   updateConfig: (newConfig: Partial<EventConfig>) => void;
 }
 
-const COLORS = ['#1E90FF', '#00C853', '#FF6B35', '#9C27B0', '#E91E63', '#3F51B5', '#FF9800'];
+const WHEEL_THEMES = {
+  dark: {
+    colors: ['#1E90FF', '#00C853', '#FF6B35', '#9C27B0', '#E91E63', '#3F51B5', '#FF9800'],
+    border: 'rgba(255,255,255,0.2)',
+    text: '#FFFFFF',
+    textOutline: null as string | null,
+    hubFill: '#2A1F40',
+    hubStroke: '#FFD700',
+  },
+  // Deeper fills so white labels keep contrast on bright backgrounds
+  light: {
+    colors: ['#1565C0', '#2E7D32', '#D84315', '#7B1FA2', '#C2185B', '#303F9F', '#E65100'],
+    border: 'rgba(255,255,255,0.6)',
+    text: '#FFFFFF',
+    textOutline: 'rgba(0,0,0,0.35)',
+    hubFill: '#FFFFFF',
+    hubStroke: '#B45309',
+  },
+};
+
 
 export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) {
   const [selectedPrizeId, setSelectedPrizeId] = useState<string>(() => {
@@ -30,6 +51,7 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
   const [showModal, setShowModal] = useState(false);
   const [showRewardLogModal, setShowRewardLogModal] = useState(false);
   const { t } = useLanguage();
+  const { theme } = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const visualRotation = useMotionValue(0);
@@ -56,6 +78,23 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
   }, [visualRotation, numSlices]);
 
   const currentPrize = config.prizes.find(p => p.id === selectedPrizeId);
+
+  // Ranked by prize order (first prize first); draw order within the same prize
+  const sessionWinners = useMemo(() => {
+    const rank = (prize: string) => {
+      const i = config.prizes.findIndex(p => p.name === prize);
+      return i === -1 ? config.prizes.length : i;
+    };
+    return config.rewardLog
+      .filter(l => l.sessionId === config.currentSessionId && l.isAccepted && l.gameType === 'Lucky Wheel')
+      .map((entry, order) => ({ entry, order }))
+      .sort((a, b) => rank(a.entry.prize) - rank(b.entry.prize) || a.order - b.order)
+      .map(x => x.entry);
+  }, [config.rewardLog, config.currentSessionId, config.prizes]);
+  const latestWinnerId = sessionWinners.reduce<RewardLogEntry | null>(
+    (latest, e) => (!latest || e.timestamp >= latest.timestamp ? e : latest),
+    null
+  )?.id;
 
   const handleDecision = (decision: 'ACCEPT' | 'REJECT_KEEP' | 'REJECT_REMOVE') => {
     if (!winner || !currentPrize) return;
@@ -113,7 +152,7 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
 
   useEffect(() => {
     drawWheel();
-  }, [displayParticipants]);
+  }, [displayParticipants, theme]);
 
   const drawWheel = () => {
     const canvas = canvasRef.current;
@@ -126,10 +165,11 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
     const height = canvas.height;
     const centerX = width / 2;
     const centerY = height / 2;
-    const radius = Math.min(width, height) / 2 - 10;
+    const radius = Math.min(width, height) / 2;
 
     ctx.clearRect(0, 0, width, height);
 
+    const wt = WHEEL_THEMES[theme];
     const arcSize = (2 * Math.PI) / numSlices;
 
     for (let i = 0; i < numSlices; i++) {
@@ -137,14 +177,14 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
       
       // Draw slice
       ctx.beginPath();
-      ctx.fillStyle = COLORS[i % COLORS.length];
+      ctx.fillStyle = wt.colors[i % wt.colors.length];
       ctx.moveTo(centerX, centerY);
       ctx.arc(centerX, centerY, radius, angle, angle + arcSize);
       ctx.lineTo(centerX, centerY);
       ctx.fill();
       
       // Draw border
-      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.strokeStyle = wt.border;
       ctx.lineWidth = 1;
       ctx.stroke();
 
@@ -170,7 +210,7 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
       }
 
       if (shouldDrawText) {
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = wt.text;
         ctx.font = `bold ${fontSize} Inter, sans-serif`;
         
         const p = displayParticipants[i];
@@ -180,6 +220,12 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
           text = text.substring(0, maxLen - 2) + '..';
         }
         
+        if (wt.textOutline) {
+          ctx.lineWidth = 3;
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = wt.textOutline;
+          ctx.strokeText(text, 0, 0);
+        }
         ctx.fillText(text, 0, 0);
       }
       ctx.restore();
@@ -187,10 +233,10 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
     
     // Draw center dot
     ctx.beginPath();
-    ctx.fillStyle = '#2A1F40';
+    ctx.fillStyle = wt.hubFill;
     ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.strokeStyle = '#FFD700';
+    ctx.strokeStyle = wt.hubStroke;
     ctx.lineWidth = 4;
     ctx.stroke();
   };
@@ -265,49 +311,8 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
   return (
     <div className="relative flex flex-col items-center justify-between min-h-screen p-8 text-white w-full">
       
-      {/* Sliding Name Reel (Top-Left) */}
-      {displayParticipants.length > 0 && (
-        <div className="absolute top-28 left-8 z-30 w-64 h-[240px] liquid-glass rounded-2xl overflow-hidden border border-white/10 flex flex-col shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
-          {/* Header */}
-          <div className="bg-black/40 px-4 py-2 border-b border-white/5 text-center text-xs font-bold tracking-wider text-white/60">
-            {t('game.remainingParticipants') || 'DANH SÁCH VÒNG XOAY'}
-          </div>
-          
-          {/* Reel Area */}
-          <div className="flex-1 relative overflow-hidden">
-            {/* Center active highlight line */}
-            <div className="absolute inset-x-2 top-[100px] h-[40px] rounded-lg bg-[#FF6B35]/20 border border-[#FF6B35]/40 pointer-events-none z-10 flex items-center justify-between px-3">
-              <span className="text-[#FFD700] text-xs font-bold">▶</span>
-              <span className="text-[#FFD700] text-xs font-bold">◀</span>
-            </div>
-            
-            {/* Scrollable list */}
-            <motion.div
-              style={{ y: tapeY }}
-              className="absolute left-0 right-0 flex flex-col"
-            >
-              {displayParticipants.map((p, idx) => {
-                const isActive = idx === activeIndex;
-                return (
-                  <div
-                    key={`reel-${p.ids}`}
-                    className={`h-[40px] flex items-center justify-center px-4 transition-all duration-150 ${
-                      isActive 
-                        ? 'text-[#FFD700] font-bold text-base scale-105 drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]' 
-                        : 'text-white/40 text-sm'
-                    }`}
-                  >
-                    <span className="truncate">{p.name}</span>
-                  </div>
-                );
-              })}
-            </motion.div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
-      <div className="w-full max-w-[1120px] flex justify-between items-center z-50 relative pointer-events-auto">
+      <div className="w-full max-w-[1400px] flex justify-between items-center z-50 relative pointer-events-auto">
         <button
           onClick={onBack}
           disabled={isSpinning || !!winner}
@@ -330,7 +335,7 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
             <FileText className="w-4 h-4" /> {t('game.rewardLog')}
           </button>
           <div className="flex items-center gap-2 bg-black/30 p-2 rounded-xl border border-white/10">
-            <Trophy className="w-5 h-5 text-[#FFD700]" />
+            <Trophy className="w-5 h-5 text-brand-gold" />
             <select 
               value={selectedPrizeId}
               onChange={(e) => setSelectedPrizeId(e.target.value)}
@@ -338,7 +343,7 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
               className="bg-transparent text-white font-medium focus:outline-none cursor-pointer"
             >
               {config.prizes.map(p => (
-                <option key={p.id} value={p.id} className="text-black">{p.name}</option>
+                <option key={p.id} value={p.id} className="text-gray-900">{p.name}</option>
               ))}
             </select>
           </div>
@@ -346,59 +351,80 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
       </div>
 
       {/* Main Game Area */}
-      <div className="flex-1 flex flex-col md:flex-row items-center justify-center w-full z-10 relative mt-4 gap-12 max-w-[1120px]">
-        
-        {/* Left Side: Wheel */}
-        <div className="relative flex items-center justify-center">
-          {/* Wheel Container */}
-          <div className="relative bg-[#2A1F40] p-4 rounded-full border-8 border-[#FF6B35]/50 shadow-[0_0_50px_rgba(255,107,53,0.3)]">
-            <motion.canvas 
-              ref={canvasRef}
-              width={400}
-              height={400}
-              className="rounded-full"
-              style={{ rotate: visualRotation }}
-            />
-          </div>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)_420px] lg:gap-x-8 gap-y-6 items-start w-full z-10 relative mt-4 gap-8 max-w-[1400px]">
+
+        {/* Left: Reel */}
+        <div className="order-2 lg:order-none flex justify-center lg:justify-start lg:col-start-1 lg:row-start-2 lg:self-center">
+          {/* Sliding Name Reel  */}
+          {displayParticipants.length > 0 && (
+            <div className="relative z-30 w-full max-w-[320px] h-[240px] shrink-0 liquid-glass rounded-2xl overflow-hidden border border-white/10 flex flex-col shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+              {/* Header */}
+              <div className="bg-black/40 px-4 py-2 border-b border-white/5 text-center text-xs font-bold tracking-wider text-white/60">
+                {t('game.remainingParticipants') || 'DANH SÁCH VÒNG XOAY'}
+              </div>
           
-          {/* Indicator Pointer (Right side, 0 degrees) */}
-          <div className="absolute right-[-20px] top-1/2 transform -translate-y-1/2 text-[#FFD700] z-20 drop-shadow-[0_0_10px_rgba(255,215,0,0.8)]">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 12L20 4V20L4 12Z" />
-            </svg>
-          </div>
+              {/* Reel Area */}
+              <div className="flex-1 relative overflow-hidden">
+                {/* Center active highlight line */}
+                <div className="absolute inset-x-2 top-[100px] h-[40px] rounded-lg bg-[#FF6B35]/20 border border-[#FF6B35]/40 pointer-events-none z-10 flex items-center justify-between px-3">
+                  <span className="text-brand-gold text-xs font-bold">▶</span>
+                  <span className="text-brand-gold text-xs font-bold">◀</span>
+                </div>
+            
+                {/* Scrollable list */}
+                <motion.div
+                  style={{ y: tapeY }}
+                  className="absolute left-0 right-0 flex flex-col"
+                >
+                  {displayParticipants.map((p, idx) => {
+                    const isActive = idx === activeIndex;
+                    return (
+                      <div
+                        key={`reel-${p.ids}`}
+                        className={`h-[40px] flex items-center justify-center px-4 transition-all duration-150 ${
+                          isActive 
+                            ? 'text-brand-gold font-bold text-base scale-105 drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]' 
+                            : 'text-white/40 text-sm'
+                        }`}
+                      >
+                        <span className="truncate">{p.name}</span>
+                      </div>
+                    );
+                  })}
+                </motion.div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right Side: Winner Reveal & Controls */}
-        <div className="flex flex-col items-center md:items-start justify-center gap-8 w-full max-w-sm">
-          <div className="mb-4">
-             <h2 className="text-2xl text-[#FFD700] font-bold drop-shadow-lg text-center md:text-left">{t('game.drawing')} {currentPrize?.name || t('game.prizeDefault')}</h2>
-          </div>
-
-          {/* Winner Display */}
-          <div className="liquid-glass-dark rounded-[24px] p-8 w-full min-h-[160px] flex flex-col items-center justify-center text-center">
-            {winner ? (
-              <motion.div 
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", bounce: 0.5 }}
-                className="flex flex-col items-center gap-2"
-              >
-                <div className="text-sm font-mono text-[#FF6B35] tracking-widest uppercase">{t('modal.winner')}</div>
-                <div className="text-3xl font-bold text-white mt-2">{winner.name}</div>
-                <div className="text-white/50 font-mono text-sm">{winner.ids}</div>
-              </motion.div>
-            ) : (
-              <div className="text-white/40 font-medium text-lg">
-                {isSpinning ? t('game.drawing') : t('game.spin')}
-              </div>
-            )}
+        {/* Center: Title + Wheel + Spin */}
+        <div className="order-1 lg:order-2 flex flex-col items-center gap-6 min-w-0 lg:contents">
+          <h2 className="text-2xl text-brand-gold font-bold drop-shadow-lg text-center lg:col-start-2 lg:row-start-1">{t('game.drawing')} {currentPrize?.name || t('game.prizeDefault')}</h2>
+          {/* Wheel */}
+          <div className="relative flex items-center justify-center lg:col-start-2 lg:row-start-2 lg:justify-self-center">
+            {/* Wheel Container */}
+            <div className="relative bg-(--surface-head) rounded-full border-8 border-[#FF6B35]/50 shadow-[0_0_50px_rgba(255,107,53,0.3)]">
+              <motion.canvas 
+                ref={canvasRef}
+                width={400}
+                height={400}
+                className="rounded-full"
+                style={{ rotate: visualRotation }}
+              />
+            </div>
+          
+            {/* Indicator Pointer (Right side, 0 degrees) */}
+            <div className="absolute right-[-20px] top-1/2 transform -translate-y-1/2 text-brand-gold z-20 drop-shadow-[0_0_10px_rgba(255,215,0,0.8)]">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 12L20 4V20L4 12Z" />
+              </svg>
+            </div>
           </div>
 
           <button
             onClick={startSpin}
             disabled={isSpinning || !!winner || config.remainingParticipants.length === 0}
-            className={`w-full py-5 rounded-2xl font-bold text-xl flex justify-center items-center gap-3 transition-all duration-300 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.2)] ${
+            className={`w-full max-w-[400px] lg:col-start-2 lg:row-start-3 lg:justify-self-center py-5 rounded-2xl font-bold text-xl text-on-accent flex justify-center items-center gap-3 transition-all duration-300 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.2)] ${
               isSpinning || !!winner || config.remainingParticipants.length === 0
                 ? 'bg-gray-600 cursor-not-allowed opacity-50'
                 : 'bg-[#FF6B35] hover:bg-[#ff8052] hover:scale-105 hover:shadow-[0_25px_50px_-12px_rgba(255,107,53,0.4)]'
@@ -413,6 +439,31 @@ export default function LuckyWheelGame({ config, onBack, updateConfig }: Props) 
               </>
             )}
           </button>
+
+          {/* Winner Display */}
+          <div className="liquid-glass-dark rounded-[24px] p-5 w-full max-w-[400px] min-h-[96px] lg:col-start-2 lg:row-start-4 lg:justify-self-center flex flex-col items-center justify-center text-center">
+            {winner ? (
+              <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", bounce: 0.5 }}
+                className="flex flex-col items-center gap-2"
+              >
+                <div className="text-sm font-mono text-brand-orange tracking-widest uppercase">{t('modal.winner')}</div>
+                <div className="text-3xl font-bold text-white mt-2">{winner.name}</div>
+                <div className="text-white/50 font-mono text-sm">{winner.ids}</div>
+              </motion.div>
+            ) : (
+              <div className="text-white/40 font-medium text-lg">
+                {isSpinning ? t('game.drawing') : t('game.spin')}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Winners */}
+        <div className="order-3 lg:order-none lg:col-start-3 lg:row-start-2 lg:self-center">
+          <WinnersPanel entries={sessionWinners} latestId={latestWinnerId} />
         </div>
 
       </div>

@@ -1,7 +1,8 @@
 import React from 'react';
-import { Dices, Brain, PanelLeftClose, PanelLeftOpen, Languages } from 'lucide-react';
+import { Dices, Brain, PanelLeftClose, PanelLeftOpen, Languages, Sun, Moon } from 'lucide-react';
 import { MainTab } from '../types';
 import { useLanguage } from '../LanguageContext';
+import { useTheme } from '../ThemeContext';
 
 interface MainSidebarProps {
   activeTab: MainTab;
@@ -12,6 +13,7 @@ interface MainSidebarProps {
 
 export default function MainSidebar({ activeTab, onChangeTab, collapsed, onToggleCollapse }: MainSidebarProps) {
   const { t, lang, setLang } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
 
   const items: { id: MainTab; label: string; icon: React.ReactNode }[] = [
     { id: 'RANDOM_GAMES', label: t('sidebar.randomGames'), icon: <Dices className="w-5 h-5 shrink-0" /> },
@@ -63,6 +65,16 @@ export default function MainSidebar({ activeTab, onChangeTab, collapsed, onToggl
       >
         <Languages className="w-5 h-5 shrink-0" />
         {!collapsed && <span>{lang === 'en' ? 'English' : 'Tiếng Việt'}</span>}
+      </button>
+
+      <button
+        onClick={toggleTheme}
+        title={theme === 'dark' ? t('sidebar.themeToLight') : t('sidebar.themeToDark')}
+        aria-label={theme === 'dark' ? t('sidebar.themeToLight') : t('sidebar.themeToDark')}
+        className={itemClass(false)}
+      >
+        {theme === 'dark' ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}
+        {!collapsed && <span>{theme === 'dark' ? t('sidebar.themeToLight') : t('sidebar.themeToDark')}</span>}
       </button>
     </aside>
   );
