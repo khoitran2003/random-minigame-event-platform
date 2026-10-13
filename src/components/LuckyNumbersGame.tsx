@@ -6,6 +6,7 @@ import { motion, useAnimation } from 'motion/react';
 import RewardDecisionModal from './RewardDecisionModal';
 import RewardLogModal from './RewardLogModal';
 import { useLanguage } from '../LanguageContext';
+import { useTheme } from '../ThemeContext';
 
 interface Props {
   config: EventConfig;
@@ -30,6 +31,10 @@ export default function LuckyNumbersGame({ config, onBack, updateConfig }: Props
   const [showModal, setShowModal] = useState(false);
   const [showRewardLogModal, setShowRewardLogModal] = useState(false);
   const { t } = useLanguage();
+  const { theme } = useTheme();
+  // Framer can't tween CSS variables, so the winner flash needs concrete colors per theme
+  const flashBase = theme === 'light' ? '#111827' : '#ffffff';
+  const flashAccent = theme === 'light' ? '#b45309' : '#FFD700';
   
   const drawIntervalRef = useRef<number | null>(null);
 
@@ -211,7 +216,7 @@ export default function LuckyNumbersGame({ config, onBack, updateConfig }: Props
           <div className="bg-black/60 w-full rounded-2xl border-2 border-black/80 shadow-inner p-6 overflow-hidden flex flex-col items-center justify-center min-h-[200px] relative">
             <motion.div 
               className="text-5xl md:text-7xl font-mono font-bold tracking-widest text-white mb-4 z-10"
-              animate={winner ? { scale: [1, 1.2, 1], color: ['#fff', '#FFD700', '#fff'] } : {}}
+              animate={winner ? { scale: [1, 1.2, 1], color: [flashBase, flashAccent, flashBase] } : {}}
               transition={{ duration: 0.5, ease: "easeInOut" }}
             >
               {displayNumber}

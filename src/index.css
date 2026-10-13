@@ -32,6 +32,7 @@
 [data-theme="dark"] {
   --color-white: #ffffff;
   --color-black: #000000;
+  --color-arcade-ink: #0B0F1A;
   --color-brand-gold: #FFD700;
   --color-brand-orange: #FF6B35;
   --color-brand-green: #00C853;
@@ -67,6 +68,7 @@
 [data-theme="light"] {
   --color-white: #111827;
   --color-black: #ffffff;
+  --color-arcade-ink: #ffffff;
   --color-brand-gold: #b45309;
   --color-brand-orange: #c2410c;
   --color-brand-green: #15803d;

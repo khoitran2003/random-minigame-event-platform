@@ -139,7 +139,7 @@ export default function KahutConfig({
           {showImageTips && (
             <div
               role="note"
-              className="absolute z-30 left-0 top-full mt-2 sm:left-full sm:top-0 sm:mt-0 sm:ml-3 w-[min(420px,calc(100vw-4rem))] rounded-xl border border-neon-cyan/50 bg-arcade-ink/95 backdrop-blur p-4 text-sm text-white/90 shadow-[0_0_30px_rgba(34,211,238,0.25)] font-sans"
+              className="absolute z-30 left-0 top-full mt-2 sm:left-full sm:top-0 sm:mt-0 sm:ml-3 w-[min(420px,calc(100vw-4rem))] rounded-xl border border-neon-cyan/50 bg-(--surface-modal)/95 backdrop-blur p-4 text-sm text-white/90 shadow-[0_0_30px_rgba(34,211,238,0.25)] font-sans"
             >
               <div className="font-mono text-neon-cyan mb-2">{t('kahut.imageTipsTitle')}</div>
               <ul className="list-disc pl-5 flex flex-col gap-1.5 marker:text-neon-cyan">
